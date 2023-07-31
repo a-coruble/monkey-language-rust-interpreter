@@ -1,8 +1,9 @@
 pub mod token;
 pub mod lexer;
+pub mod repl;
 
 fn main() {
-    println!("Hello, world!");
+    repl::start_repl();
 }
 
 #[cfg(test)]
