@@ -7,7 +7,7 @@ pub enum Token {
 
     // Identifiers + literals
     IDENT(String),
-    INT(i64),
+    INT(String),
 
     // Operators
     ASSIGN,
@@ -36,7 +36,7 @@ pub enum Token {
     FALSE,
     IF,
     ELSE,
-    RETURN
+    RETURN,
 }
 
 impl fmt::Display for Token {

@@ -20,14 +20,14 @@ pub fn start_repl() {
 }
 
 fn handle_user_input(read_line: &String) {
-    let mut lexer = Lexer::new(read_line.as_str());
+    let mut lexer = Lexer::new(read_line.clone());
 
     loop {
         let token = lexer.next_token();
         match token {
             Token::ILLEGAL => break,
             Token::EOF => break,
-            _ => println!("{token}")
+            _ => println!("{token}"),
         }
     }
 }
