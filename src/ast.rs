@@ -2,14 +2,14 @@ use std::fmt::Debug;
 
 use crate::token::Token;
 
-pub trait Node: Debug + Clone {
-    fn token_literal(&self) -> String;
-}
-
 pub enum NodeTypes {
     Epxression(ExpressionTypes),
     Statement(StatementTypes),
     Program(Program),
+}
+
+pub trait Node: Debug + Clone {
+    fn token_literal(&self) -> String;
 }
 
 // Expressions
@@ -29,9 +29,9 @@ impl Node for ExpressionTypes {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Expression {
-    token: Token,
+    pub token: Token,
 }
 
 impl Node for Expression {
@@ -40,9 +40,9 @@ impl Node for Expression {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IdentifierExpression {
-    token: Token,
+    pub token: Token,
 }
 
 impl Node for IdentifierExpression {
@@ -53,7 +53,7 @@ impl Node for IdentifierExpression {
 
 // Statements
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StatementTypes {
     Let(LetStatement),
 }
@@ -66,11 +66,11 @@ impl Node for StatementTypes {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LetStatement {
-    name: Expression,
-    token: Token,
-    value: IdentifierExpression,
+    pub name: IdentifierExpression,
+    pub token: Token,
+    pub value: Expression,
 }
 
 impl Node for LetStatement {
@@ -79,9 +79,19 @@ impl Node for LetStatement {
     }
 }
 
+// Program
+
 #[derive(Clone, Debug)]
 pub struct Program {
-    statements: Vec<StatementTypes>,
+    pub statements: Vec<StatementTypes>,
+}
+
+impl Program {
+    pub fn new() -> Self {
+        Self {
+            statements: Vec::new(),
+        }
+    }
 }
 
 impl Node for Program {
