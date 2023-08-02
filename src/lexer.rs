@@ -128,7 +128,8 @@ if (5 < 10) {
 } else {
     return false;
 }
-10 == 10; 10 != 9;"
+10 == 10;
+10 != 9;"
             .to_string();
         let expected_tokens = vec![
             Token::LET,
@@ -209,7 +210,7 @@ if (5 < 10) {
         let mut lexer = Lexer::new(input);
         for expected in expected_tokens {
             let token = lexer.next_token();
-            println!("Expected: {} - Got {}", expected, token);
+            println!("Expected: {} - Got: {}", expected, token);
             assert_eq!(expected, token);
         }
     }
