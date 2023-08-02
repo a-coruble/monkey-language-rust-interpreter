@@ -1,16 +1,36 @@
+use anyhow::Error;
+
 use crate::{
     ast::{Expression, IdentifierExpression, LetStatement, Program, StatementTypes},
     lexer::Lexer,
     token::Token,
 };
 
-use anyhow::Result;
-use std::mem::discriminant;
+use std::result::Result;
+use std::{fmt::Display, mem::discriminant};
+
+#[derive(Debug)]
+pub struct ParserError {
+    pub details: String,
+}
+
+impl ParserError {
+    fn new(details: String) -> Self {
+        Self { details }
+    }
+}
+
+impl Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[ParserError] - {}", self.details)
+    }
+}
 
 pub struct Parser {
     pub lexer: Lexer,
     pub current_token: Token,
     pub peek_token: Token,
+    pub errors: Vec<ParserError>,
 }
 
 impl Parser {
@@ -23,11 +43,12 @@ impl Parser {
             lexer,
             current_token,
             peek_token,
+            errors: Vec::new(),
         };
         parser
     }
 
-    pub fn parse_program(&mut self) -> Result<Program> {
+    pub fn parse_program(&mut self) -> Result<Program, Error> {
         let mut program = Program::new();
 
         while self.current_token != Token::EOF {
@@ -48,7 +69,7 @@ impl Parser {
     }
 
     fn expect_peek(&mut self, token: Token) -> bool {
-        if self.peek_token_is(token) {
+        if self.peek_token_is(token.clone()) {
             self.next_token();
             true
         } else {
@@ -63,16 +84,22 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Option<StatementTypes> {
         match self.current_token {
-            Token::LET => Some(StatementTypes::Let(self.parse_let_statement())),
-            _ => todo!(),
+            Token::LET => match self.parse_let_statement() {
+                Ok(let_statement) => Some(StatementTypes::Let(let_statement)),
+                Err(parser_error) => {
+                    self.errors.push(parser_error);
+                    None
+                }
+            },
+            _ => None,
         }
     }
 
-    fn parse_let_statement(&mut self) -> LetStatement {
+    fn parse_let_statement(&mut self) -> Result<LetStatement, ParserError> {
         let let_token = self.current_token.clone();
 
         if !self.expect_peek(Token::IDENT("whatever".into())) {
-            unreachable!("[Parser::parse_let_statement] The next token after a LET token should be an IDENT token");
+            return Err(self.peek_error(Token::IDENT("whatever".into())));
         }
 
         let name = IdentifierExpression {
@@ -80,20 +107,26 @@ impl Parser {
         };
 
         if !self.expect_peek(Token::ASSIGN) {
-            unreachable!("[Parser::parse_let_statement] The next token after an IDENT token should be an ASSIGN token");
+            return Err(self.peek_error(Token::ASSIGN));
         }
 
         while !self.current_token_is(Token::SEMICOLON) {
             self.next_token();
         }
 
-        LetStatement {
+        Ok(LetStatement {
             name,
             token: let_token,
             value: Expression {
                 token: Token::ILLEGAL,
             },
-        } // TODO: Replace the Token::ILLEGAL usage by real computed value once we know how to parse expressions
+        }) // TODO: Replace the Token::ILLEGAL usage by real computed value once we know how to parse expressions
+    }
+
+    fn peek_error(&mut self, token: Token) -> ParserError {
+        ParserError {
+            details: format!("Expected Token: {} -- Got: {} ", token, self.peek_token),
+        }
     }
 }
 
@@ -106,12 +139,24 @@ mod test {
 
     use super::Parser;
 
+    fn test_parser_error_presence(parser: Parser) {
+        if parser.errors.len() == 0 {
+            return;
+        }
+
+        println!("Parser got some errors:");
+        for error in parser.errors {
+            println!("{}", error);
+        }
+        panic!();
+    }
+
     #[test]
     fn test_parse_let_statements() {
         let input = "
-let x = 5;
-let y = 10;
-let foobar = 838383;
+let x 5;
+let = 10;
+let 838383;
         "
         .to_string();
         let expected_output: Vec<StatementTypes> = vec![
@@ -146,6 +191,7 @@ let foobar = 838383;
 
         let mut parser = Parser::new(input);
         let program = parser.parse_program();
+        test_parser_error_presence(parser);
         match program {
             Ok(program) => {
                 assert_eq!(program.statements.len(), 3);
