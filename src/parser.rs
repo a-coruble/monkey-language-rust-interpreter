@@ -1,13 +1,29 @@
 use anyhow::Error;
 
 use crate::{
-    ast::{Expression, IdentifierExpression, LetStatement, Program, StatementTypes},
+    ast::{
+        Expression, ExpressionStatement, ExpressionTypes, IdentifierExpression, LetStatement,
+        Program, ReturnStatement, StatementTypes,
+    },
     lexer::Lexer,
     token::Token,
 };
 
 use std::result::Result;
 use std::{fmt::Display, mem::discriminant};
+
+pub enum PrecedenceOrder {
+    LOWEST = 0,
+    EQUALS = 1,      // ==
+    LESSGREATER = 2, // > or <
+    SUM = 3,         //+
+    PRODUCT = 4,     //*
+    PREFIX = 5,      //-Xor!X
+    CALL = 6,        // myFunction(X)
+}
+
+type ExpressionParserResult = Result<ExpressionTypes, ParserError>;
+// type ParseFn = dyn Fn() -> ExpressionParserResult;
 
 #[derive(Debug)]
 pub struct ParserError {
@@ -31,6 +47,8 @@ pub struct Parser {
     pub current_token: Token,
     pub peek_token: Token,
     pub errors: Vec<ParserError>,
+    // prefix_parse_fns: HashMap<Token, ParseFn>,
+    // suffix_parse_fns: HashMap<Token, ParseFn>,
 }
 
 impl Parser {
@@ -38,13 +56,19 @@ impl Parser {
         let mut lexer = Lexer::new(raw_input);
         let current_token = lexer.next_token();
         let peek_token = lexer.next_token();
+        // let prefix_parse_fns: HashMap<Token, ParseFn> = HashMap::new();
+        // let suffix_parse_fns: HashMap<Token, ParseFn> = HashMap::new();
 
         let parser = Parser {
             lexer,
             current_token,
             peek_token,
             errors: Vec::new(),
+            // prefix_parse_fns,
+            // suffix_parse_fns,
         };
+
+        // parser.register_prefix_parse_fn(Token::IDENT("whatever".into()), parser.parse_identifier);
         parser
     }
 
@@ -82,6 +106,14 @@ impl Parser {
         self.peek_token = self.lexer.next_token();
     }
 
+    // fn register_prefix_parse_fn(&mut self, token: Token, parse_fn: ParseFn) {
+    //     self.prefix_parse_fns.insert(token, parse_fn);
+    // }
+
+    // fn register_suffix_parse_fn(&mut self, token: Token, parse_fn: ParseFn) {
+    //     self.suffix_parse_fns.insert(token, parse_fn);
+    // }
+
     fn parse_statement(&mut self) -> Option<StatementTypes> {
         match self.current_token {
             Token::LET => match self.parse_let_statement() {
@@ -91,7 +123,20 @@ impl Parser {
                     None
                 }
             },
-            _ => None,
+            Token::RETURN => match self.parse_return_statement() {
+                Ok(let_statement) => Some(StatementTypes::Return(let_statement)),
+                Err(parser_error) => {
+                    self.errors.push(parser_error);
+                    None
+                }
+            },
+            _ => match self.parse_expression_statement() {
+                Ok(statement) => Some(StatementTypes::Expression(statement)),
+                Err(parse_error) => {
+                    self.errors.push(parse_error);
+                    None
+                }
+            },
         }
     }
 
@@ -117,23 +162,102 @@ impl Parser {
         Ok(LetStatement {
             name,
             token: let_token,
-            value: Expression {
-                token: Token::ILLEGAL,
+            value: match self.parse_expression(PrecedenceOrder::LOWEST) {
+                Some(Ok(expression)) => match expression {
+                    ExpressionTypes::Identifier(identfier_expression) => Expression {
+                        token: identfier_expression.token,
+                    },
+                    ExpressionTypes::Expression(expression) => expression,
+                },
+                Some(Err(err)) => {
+                    println!("{}", err);
+                    return Err(ParserError::new(
+                        "Wrong Expression parsed after let statement".into(),
+                    ));
+                }
+                None => Expression {
+                    token: self.current_token.clone(),
+                },
             },
         }) // TODO: Replace the Token::ILLEGAL usage by real computed value once we know how to parse expressions
     }
 
     fn peek_error(&mut self, token: Token) -> ParserError {
-        ParserError {
-            details: format!("Expected Token: {} -- Got: {} ", token, self.peek_token),
+        ParserError::new(format!(
+            "Expected Token: {} -- Got: {} ",
+            token, self.peek_token
+        ))
+    }
+
+    fn parse_return_statement(&mut self) -> Result<ReturnStatement, ParserError> {
+        let return_token = self.current_token.clone();
+
+        self.next_token();
+
+        while !self.current_token_is(Token::SEMICOLON) {
+            self.next_token();
         }
+
+        Ok(ReturnStatement {
+            token: return_token,
+            value: Expression {
+                token: Token::ILLEGAL, // TODO: Replace the Token::ILLEGAL usage by real computed value once we know how to parse expressions
+            },
+        })
+    }
+
+    fn parse_expression_statement(&mut self) -> Result<ExpressionStatement, ParserError> {
+        let expression_statement = ExpressionStatement {
+            token: self.current_token.clone(),
+            expression: match self.parse_expression(PrecedenceOrder::LOWEST) {
+                Some(expression_result) => match expression_result {
+                    Ok(expression) => expression,
+                    Err(_) => todo!(),
+                },
+                None => ExpressionTypes::Expression(Expression {
+                    token: Token::ILLEGAL,
+                }),
+            },
+        };
+
+        if self.peek_token_is(Token::SEMICOLON) {
+            self.next_token();
+        }
+
+        Ok(expression_statement)
+    }
+
+    fn parse_expression(&mut self, lowest: PrecedenceOrder) -> Option<ExpressionParserResult> {
+        println!("{}", self.current_token.clone());
+        match &self.current_token {
+            Token::IDENT(_) => Some(self.parse_identifier()),
+            Token::SEMICOLON => None,
+            x  => {
+                println!("Couldn't find a parsing function associated to {}", x);
+                Some(Err(ParserError::new(format!("Couldn't find a parsing function associated to {}", x))))
+            }
+            // Some(parse_fn) => match parse_fn() {
+            //     Ok(expression) => Ok(expression),
+            //     Err(_) => todo!(),
+            // },
+            // None => todo!(),
+        }
+    }
+
+    pub fn parse_identifier(&mut self) -> ExpressionParserResult {
+        Ok(ExpressionTypes::Identifier(IdentifierExpression {
+            token: self.current_token.clone(),
+        }))
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{
-        ast::{Expression, IdentifierExpression, LetStatement, StatementTypes},
+        ast::{
+            Expression, ExpressionStatement, ExpressionTypes, IdentifierExpression, LetStatement,
+            ReturnStatement, StatementTypes,
+        },
         token::Token,
     };
 
@@ -154,9 +278,9 @@ mod test {
     #[test]
     fn test_parse_let_statements() {
         let input = "
-let x 5;
-let = 10;
-let 838383;
+let x = 5;
+let y = 10;
+let foobar = 838383;
         "
         .to_string();
         let expected_output: Vec<StatementTypes> = vec![
@@ -166,7 +290,7 @@ let 838383;
                 },
                 token: Token::LET,
                 value: Expression {
-                    token: Token::ILLEGAL,
+                    token: Token::INT("5".into()),
                 },
             }),
             StatementTypes::Let(LetStatement {
@@ -175,7 +299,7 @@ let 838383;
                 },
                 token: Token::LET,
                 value: Expression {
-                    token: Token::ILLEGAL,
+                    token: Token::INT("10".to_string()),
                 },
             }),
             StatementTypes::Let(LetStatement {
@@ -183,6 +307,50 @@ let 838383;
                     token: Token::IDENT("foobar".into()),
                 },
                 token: Token::LET,
+                value: Expression {
+                    token: Token::INT("838383".into()),
+                },
+            }),
+        ];
+
+        let mut parser = Parser::new(input);
+        let program = parser.parse_program();
+        // println!("{}", &program.unwrap().clone().statements[0]);
+        test_parser_error_presence(parser);
+        match program {
+            Ok(program) => {
+                assert_eq!(program.statements.len(), 3);
+                for (i, expected) in expected_output.into_iter().enumerate() {
+                    assert_eq!(expected, program.statements[i])
+                }
+            }
+            Err(_) => panic!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_return_statements() {
+        let input = "
+return 5;
+return 10;
+return 993322;
+        "
+        .to_string();
+        let expected_output: Vec<StatementTypes> = vec![
+            StatementTypes::Return(ReturnStatement {
+                token: Token::RETURN,
+                value: Expression {
+                    token: Token::ILLEGAL,
+                },
+            }),
+            StatementTypes::Return(ReturnStatement {
+                token: Token::RETURN,
+                value: Expression {
+                    token: Token::ILLEGAL,
+                },
+            }),
+            StatementTypes::Return(ReturnStatement {
+                token: Token::RETURN,
                 value: Expression {
                     token: Token::ILLEGAL,
                 },
@@ -200,6 +368,31 @@ let 838383;
                 }
             }
             Err(_) => panic!(),
+        }
+    }
+
+    #[test]
+    fn test_identifier_expression() {
+        let input = "foobar;".to_string();
+        let mut parser = Parser::new(input);
+        let program = parser.parse_program();
+        test_parser_error_presence(parser);
+
+        let expected_output: Vec<StatementTypes> =
+            vec![StatementTypes::Expression(ExpressionStatement {
+                token: Token::IDENT("foobar".into()),
+                expression: ExpressionTypes::Identifier(IdentifierExpression {
+                    token: Token::IDENT("foobar".into()),
+                }),
+            })];
+        match program {
+            Ok(program) => {
+                assert_eq!(program.statements.len(), 1);
+                for (i, expected) in expected_output.into_iter().enumerate() {
+                    assert_eq!(expected, program.statements[i])
+                }
+            }
+            Err(_) => todo!(),
         }
     }
 }
