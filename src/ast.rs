@@ -105,7 +105,7 @@ impl Node for StatementTypes {
 pub struct LetStatement {
     pub name: IdentifierExpression,
     pub token: Token,
-    pub value: Expression,
+    pub value: ExpressionTypes,
 }
 
 impl Display for LetStatement {
@@ -199,7 +199,7 @@ impl Node for Program {
 mod test {
     use crate::{ast::IdentifierExpression, token::Token};
 
-    use super::{Expression, LetStatement, Program, StatementTypes};
+    use super::{Expression, ExpressionTypes, LetStatement, Program, StatementTypes};
 
     #[test]
     fn test_ast_to_string() {
@@ -209,9 +209,9 @@ mod test {
                     token: Token::IDENT("myVar".into()),
                 },
                 token: Token::LET,
-                value: Expression {
+                value: ExpressionTypes::Expression(Expression {
                     token: Token::IDENT("anotherVar".into()),
-                },
+                }),
             })],
         };
         assert_eq!(program.to_string(), "let myVar = anotherVar;");

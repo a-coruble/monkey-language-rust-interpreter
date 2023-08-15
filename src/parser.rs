@@ -12,6 +12,7 @@ use crate::{
 use std::result::Result;
 use std::{fmt::Display, mem::discriminant};
 
+#[derive(Debug)]
 pub enum PrecedenceOrder {
     LOWEST = 0,
     EQUALS = 1,      // ==
@@ -42,6 +43,7 @@ impl Display for ParserError {
     }
 }
 
+#[derive(Debug)]
 pub struct Parser {
     pub lexer: Lexer,
     pub current_token: Token,
@@ -53,6 +55,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(raw_input: String) -> Self {
+        println!("[Parser::New] - {}", &raw_input);
         let mut lexer = Lexer::new(raw_input);
         let current_token = lexer.next_token();
         let peek_token = lexer.next_token();
@@ -73,6 +76,7 @@ impl Parser {
     }
 
     pub fn parse_program(&mut self) -> Result<Program, Error> {
+        println!("[Parser::parse_program]");
         let mut program = Program::new();
 
         while self.current_token != Token::EOF {
@@ -85,14 +89,17 @@ impl Parser {
     }
 
     fn current_token_is(&self, token: Token) -> bool {
+        println!("[Parser::current_token_is] - {:?}", discriminant(&token));
         discriminant(&self.current_token) == discriminant(&token)
     }
 
     fn peek_token_is(&self, token: Token) -> bool {
+        println!("[Parser::peek_token_is] - {:?}", discriminant(&token));
         discriminant(&self.peek_token) == discriminant(&token)
     }
 
     fn expect_peek(&mut self, token: Token) -> bool {
+        println!("[Parser::expect_peek] - {:?}", discriminant(&token));
         if self.peek_token_is(token.clone()) {
             self.next_token();
             true
@@ -102,6 +109,7 @@ impl Parser {
     }
 
     fn next_token(&mut self) {
+        println!("[Parser::next_token]");
         self.current_token = self.peek_token.clone();
         self.peek_token = self.lexer.next_token();
     }
@@ -115,6 +123,7 @@ impl Parser {
     // }
 
     fn parse_statement(&mut self) -> Option<StatementTypes> {
+        println!("[Parser::parse_statement]");
         match self.current_token {
             Token::LET => match self.parse_let_statement() {
                 Ok(let_statement) => Some(StatementTypes::Let(let_statement)),
@@ -141,6 +150,7 @@ impl Parser {
     }
 
     fn parse_let_statement(&mut self) -> Result<LetStatement, ParserError> {
+        println!("[Parser::parse_let_statement]");
         let let_token = self.current_token.clone();
 
         if !self.expect_peek(Token::IDENT("whatever".into())) {
@@ -155,34 +165,37 @@ impl Parser {
             return Err(self.peek_error(Token::ASSIGN));
         }
 
+        self.next_token();
+
+        let let_statement = LetStatement {
+            name,
+            token: let_token,
+            value: match self.parse_expression(PrecedenceOrder::LOWEST) {
+                Some(Ok(expression)) => expression,
+                Some(Err(err)) => {
+                    return Err(ParserError::new(
+                        format!(
+                            "Wrong Expression parsed after let statement, got error {}",
+                            err
+                        )
+                        .into(),
+                    ));
+                }
+                None => ExpressionTypes::Expression(Expression {
+                    token: self.current_token.clone(),
+                }),
+            },
+        };
+
         while !self.current_token_is(Token::SEMICOLON) {
             self.next_token();
         }
 
-        Ok(LetStatement {
-            name,
-            token: let_token,
-            value: match self.parse_expression(PrecedenceOrder::LOWEST) {
-                Some(Ok(expression)) => match expression {
-                    ExpressionTypes::Identifier(identfier_expression) => Expression {
-                        token: identfier_expression.token,
-                    },
-                    ExpressionTypes::Expression(expression) => expression,
-                },
-                Some(Err(err)) => {
-                    println!("{}", err);
-                    return Err(ParserError::new(
-                        "Wrong Expression parsed after let statement".into(),
-                    ));
-                }
-                None => Expression {
-                    token: self.current_token.clone(),
-                },
-            },
-        }) // TODO: Replace the Token::ILLEGAL usage by real computed value once we know how to parse expressions
+        Ok(let_statement) // TODO: Replace the Token::ILLEGAL usage by real computed value once we know how to parse expressions
     }
 
     fn peek_error(&mut self, token: Token) -> ParserError {
+        println!("[Parser::peek_error] - {:?}", discriminant(&token));
         ParserError::new(format!(
             "Expected Token: {} -- Got: {} ",
             token, self.peek_token
@@ -190,6 +203,7 @@ impl Parser {
     }
 
     fn parse_return_statement(&mut self) -> Result<ReturnStatement, ParserError> {
+        println!("[Parser::parse_return_statement]");
         let return_token = self.current_token.clone();
 
         self.next_token();
@@ -207,6 +221,7 @@ impl Parser {
     }
 
     fn parse_expression_statement(&mut self) -> Result<ExpressionStatement, ParserError> {
+        println!("[Parser::parse_expression_statement]");
         let expression_statement = ExpressionStatement {
             token: self.current_token.clone(),
             expression: match self.parse_expression(PrecedenceOrder::LOWEST) {
@@ -221,14 +236,18 @@ impl Parser {
         };
 
         if self.peek_token_is(Token::SEMICOLON) {
+            // println!("PEEK TOKEN IS SEMI");
             self.next_token();
         }
 
         Ok(expression_statement)
     }
 
-    fn parse_expression(&mut self, lowest: PrecedenceOrder) -> Option<ExpressionParserResult> {
-        println!("{}", self.current_token.clone());
+    fn parse_expression(&mut self, precedence: PrecedenceOrder) -> Option<ExpressionParserResult> {
+        println!(
+            "[Parser::parse_expression] - {:?} - Current token: {}",
+            &precedence, self.current_token
+        );
         match &self.current_token {
             Token::IDENT(_) => Some(self.parse_identifier()),
             Token::SEMICOLON => None,
@@ -245,6 +264,7 @@ impl Parser {
     }
 
     pub fn parse_identifier(&mut self) -> ExpressionParserResult {
+        println!("[Parser::parse_identifier] - {}", self.current_token);
         Ok(ExpressionTypes::Identifier(IdentifierExpression {
             token: self.current_token.clone(),
         }))
@@ -269,9 +289,10 @@ mod test {
         }
 
         println!("Parser got some errors:");
-        for error in parser.errors {
+        for error in &parser.errors {
             println!("{}", error);
         }
+
         panic!();
     }
 
@@ -289,33 +310,32 @@ let foobar = 838383;
                     token: Token::IDENT("x".into()),
                 },
                 token: Token::LET,
-                value: Expression {
+                value: ExpressionTypes::Expression(Expression {
                     token: Token::INT("5".into()),
-                },
+                }),
             }),
             StatementTypes::Let(LetStatement {
                 name: IdentifierExpression {
                     token: Token::IDENT("y".into()),
                 },
                 token: Token::LET,
-                value: Expression {
+                value: ExpressionTypes::Expression(Expression {
                     token: Token::INT("10".to_string()),
-                },
+                }),
             }),
             StatementTypes::Let(LetStatement {
                 name: IdentifierExpression {
                     token: Token::IDENT("foobar".into()),
                 },
                 token: Token::LET,
-                value: Expression {
+                value: ExpressionTypes::Expression(Expression {
                     token: Token::INT("838383".into()),
-                },
+                }),
             }),
         ];
 
         let mut parser = Parser::new(input);
         let program = parser.parse_program();
-        // println!("{}", &program.unwrap().clone().statements[0]);
         test_parser_error_presence(parser);
         match program {
             Ok(program) => {
