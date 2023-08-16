@@ -2,116 +2,24 @@ use std::fmt::{Debug, Display};
 
 use crate::token::Token;
 
-pub enum NodeTypes {
-    Epxression(ExpressionTypes),
-    Statement(StatementTypes),
-    Program(Program),
-}
-
-pub trait Node: Debug + Clone {
+pub trait Node {
     fn token_literal(&self) -> String;
 }
 
-// Expressions
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ExpressionTypes {
-    Identifier(IdentifierExpression),
-    Expression(Expression),
-}
-
-impl Node for ExpressionTypes {
-    fn token_literal(&self) -> String {
-        match self {
-            ExpressionTypes::Identifier(identifier) => identifier.token_literal(),
-            ExpressionTypes::Expression(expression) => expression.token_literal(),
-        }
-    }
-}
-
-impl Display for ExpressionTypes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExpressionTypes::Identifier(expression) => write!(f, "{}", expression),
-            ExpressionTypes::Expression(expression) => write!(f, "{}", expression),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Expression {
-    pub token: Token,
-}
-
-impl Display for Expression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.token)
-    }
-}
-
-impl Node for Expression {
-    fn token_literal(&self) -> String {
-        self.token.to_string()
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IdentifierExpression {
-    pub token: Token,
-}
-
-impl Display for IdentifierExpression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.token)
-    }
-}
-
-impl Node for IdentifierExpression {
-    fn token_literal(&self) -> String {
-        self.token.to_string()
-    }
-}
-
-// Statements
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum StatementTypes {
+pub enum Statements {
     Let(LetStatement),
-    Return(ReturnStatement),
-    Expression(ExpressionStatement),
 }
 
-impl Display for StatementTypes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            StatementTypes::Let(statement) => write!(f, "{}", statement),
-            StatementTypes::Return(statement) => write!(f, "{}", statement),
-            StatementTypes::Expression(statement) => write!(f, "{}", statement),
-        }
-    }
-}
-
-impl Node for StatementTypes {
+impl Node for Statements {
     fn token_literal(&self) -> String {
-        match self {
-            StatementTypes::Let(statement) => statement.token_literal(),
-            StatementTypes::Return(statement) => statement.token_literal(),
-            StatementTypes::Expression(statement) => statement.token_literal(),
-        }
+        todo!()
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LetStatement {
-    pub name: IdentifierExpression,
     pub token: Token,
-    pub value: ExpressionTypes,
-}
-
-impl Display for LetStatement {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} = {};", self.token, self.name, self.value)
-    }
+    pub name: Identifier,
+    pub value: Expressions,
 }
 
 impl Node for LetStatement {
@@ -120,69 +28,21 @@ impl Node for LetStatement {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ReturnStatement {
+pub struct Identifier {
     pub token: Token,
-    pub value: Expression,
+    pub value: String,
 }
 
-impl Display for ReturnStatement {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {};", self.token, self.value)
-    }
-}
-
-impl Node for ReturnStatement {
+impl Node for Identifier {
     fn token_literal(&self) -> String {
         self.token.to_string()
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ExpressionStatement {
-    pub token: Token,
-    pub expression: ExpressionTypes,
-}
+pub enum Expressions {}
 
-impl Display for ExpressionStatement {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "ExpressionStatement {{ {}, value: {} }}",
-            self.token_literal(),
-            self.expression,
-        )
-    }
-}
-
-impl Node for ExpressionStatement {
-    fn token_literal(&self) -> String {
-        self.token.to_string()
-    }
-}
-
-// Program
-
-#[derive(Clone, Debug)]
 pub struct Program {
-    pub statements: Vec<StatementTypes>,
-}
-
-impl Program {
-    pub fn new() -> Self {
-        Self {
-            statements: Vec::new(),
-        }
-    }
-}
-
-impl Display for Program {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for statement in self.statements.clone() {
-            write!(f, "{}", statement)?;
-        }
-        Ok(())
-    }
+    pub statements: Vec<Statements>,
 }
 
 impl Node for Program {
@@ -195,25 +55,8 @@ impl Node for Program {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::{ast::IdentifierExpression, token::Token};
-
-    use super::{Expression, ExpressionTypes, LetStatement, Program, StatementTypes};
-
-    #[test]
-    fn test_ast_to_string() {
-        let program = Program {
-            statements: vec![StatementTypes::Let(LetStatement {
-                name: IdentifierExpression {
-                    token: Token::IDENT("myVar".into()),
-                },
-                token: Token::LET,
-                value: ExpressionTypes::Expression(Expression {
-                    token: Token::IDENT("anotherVar".into()),
-                }),
-            })],
-        };
-        assert_eq!(program.to_string(), "let myVar = anotherVar;");
+impl Node for Expressions {
+    fn token_literal(&self) -> String {
+        todo!()
     }
 }
